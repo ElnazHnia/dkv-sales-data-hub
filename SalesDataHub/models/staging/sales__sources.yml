@@ -1,0 +1,52 @@
+version: 2
+
+sources:
+  - name: sales_raw
+    description: "Raw source tables for the DKV Sales Data Hub case study."
+    database: DKV_SALES_HUB
+    schema: RAW
+    tables:
+      - name: RAW_CUSTOMERS
+        description: "Customer master data with historical SCD2 records."
+      - name: RAW_SALES_ORDERS
+        description: "Sales order header records."
+      - name: RAW_PRODUCTS_CONTRACTS
+        description: "Product and contract master data."
+      - name: RAW_SALES_TARGETS
+        description: "Monthly sales targets with version and approval metadata."
+
+models:
+  - name: stg_sales__customers
+    description: "Cleaned customer records with historical versions preserved."
+    columns:
+      - name: customer_raw_row_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_id
+        tests:
+          - not_null
+
+  - name: stg_sales__orders
+    description: "Cleaned sales orders with technical duplicates removed."
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_sales__products
+    description: "Cleaned product and contract records."
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_sales__targets
+    description: "Monthly sales targets preserving all target versions."
+    columns:
+      - name: target_row_id
+        tests:
+          - not_null
+          - unique

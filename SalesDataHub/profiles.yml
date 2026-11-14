@@ -1,0 +1,10 @@
+SalesDataHub:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      role: ACCOUNTADMIN
+      warehouse: SALES_ANALYTICS_WH
+      database: DKV_SALES_HUB
+      schema: INTERMEDIATE
+      threads: 8
