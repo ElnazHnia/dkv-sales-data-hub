@@ -2,6 +2,7 @@ name: SalesDataHub
 version: 1.0.0
 config-version: 2
 profile: SalesDataHub
+
 model-paths:
   - models
 analysis-paths:
@@ -14,6 +15,15 @@ macro-paths:
   - macros
 snapshot-paths:
   - snapshots
+
 models:
   SalesDataHub:
-    +materialized: view
+    staging:
+      +materialized: view
+      +schema: STAGING
+    intermediate:
+      +materialized: view
+      +schema: INTERMEDIATE
+    marts:
+      +materialized: table
+      +schema: MARTS

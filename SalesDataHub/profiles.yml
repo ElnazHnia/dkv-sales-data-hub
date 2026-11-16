@@ -6,5 +6,5 @@ SalesDataHub:
       role: ACCOUNTADMIN
       warehouse: SALES_ANALYTICS_WH
       database: DKV_SALES_HUB
-      schema: INTERMEDIATE
+      schema: PUBLIC
       threads: 8

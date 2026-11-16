@@ -15,7 +15,7 @@ SELECT
     ,(case when IS_INTERNAL_TEST_ACCOUNT = 1 then TRUE else FALSE end)  AS is_internal_test_account
 
     ,CREDIT_LIMIT_EUR::NUMBER(18,2)     AS credit_limit_eur
-    
-
+    ,dense_rank() OVER (PARTITION BY customer_id ORDER BY  CUSTOMER_RAW_ROW_ID asc) AS  rn_customer
+   
 FROM {{ source('sales_raw', 'RAW_CUSTOMERS') }}
 

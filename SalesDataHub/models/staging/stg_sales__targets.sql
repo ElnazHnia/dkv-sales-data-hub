@@ -10,3 +10,6 @@ SELECT
     ,APPROVED_BY::VARCHAR                   AS approved_by
 
 FROM {{ source('sales_raw', 'RAW_SALES_TARGETS') }}
+
+
+

@@ -18,7 +18,7 @@ SELECT
 
         SYS_INGESTION_TS::TIMESTAMP_NTZ     AS sys_ingestion_ts,
         RAW_KAFKA_OFFSET_ID::NUMBER         AS raw_kafka_offset_id,
-        dense_rank() over (partition by order_id order by sys_ingestion_ts desc) rn
+        row_number() over (partition by order_id order by sys_ingestion_ts desc) rn
 
     FROM {{ source('sales_raw', 'RAW_SALES_ORDERS') }}
     qualify rn = 1

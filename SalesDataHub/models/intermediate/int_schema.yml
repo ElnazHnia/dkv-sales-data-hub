@@ -1,0 +1,13 @@
+
+version: 2
+
+models:
+  - name: int_sales__orders_enriched
+    description: "Orders enriched with historical customer and product information."
+
+    columns:
+      - name: order_id
+        description: "Unique identifier for each sales order."
+        tests:
+          - unique
+          - not_null
