@@ -1,13 +1,30 @@
-
 version: 2
 
 models:
   - name: int_sales__orders_enriched
-    description: "Orders enriched with historical customer and product information."
-
+    description: "One row per order, enriched with the customer version valid on the order date and with product information."
     columns:
       - name: order_id
         description: "Unique identifier for each sales order."
         tests:
           - unique
           - not_null
+      - name: order_date
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+      - name: country_code
+        description: "Customer country on the order date."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['DE', 'ES', 'FR', 'IT', 'NL', 'PL']
+      - name: order_status
+        tests:
+          - accepted_values:
+              values: ['Invoiced', 'Completed', 'Pending_Approval', 'Cancelled', 'Internal_Test']

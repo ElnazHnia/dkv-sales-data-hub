@@ -26,7 +26,25 @@ models:
       - name: customer_id
         tests:
           - not_null
-
+      - name: country_code
+        description: "Customer country."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['DE', 'ES', 'FR', 'IT', 'NL', 'PL']
+      - name: customer_segment
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Enterprise', 'Mid-Market', 'SMB', 'Strategic']
+      - name: md_change_reason
+        tests:
+          - accepted_values:
+              values: ['Active - Initial Load', 'Active - Segment Update', 'SCD2 Closed']
+      - name: is_internal_test_account
+        tests:
+          - not_null
+          
   - name: stg_sales__orders
     description: "Cleaned sales orders with technical duplicates removed."
     columns:
@@ -34,6 +52,26 @@ models:
         tests:
           - not_null
           - unique
+      - name: order_status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Invoiced', 'Completed', 'Pending_Approval', 'Cancelled', 'Internal_Test']
+      - name: order_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Standard_Order', 'Credit_Note']
+      - name: currency
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['EUR', 'PLN']
+      - name: sales_channel
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Direct Sales', 'Inside Sales', 'Digital Self-Service']
 
   - name: stg_sales__products
     description: "Cleaned product and contract records."
@@ -42,6 +80,11 @@ models:
         tests:
           - not_null
           - unique
+      - name: product_category
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Core Subscription', 'Analytics & Add-Ons', 'Hardware & Equipment', 'Transaction Service']
 
   - name: stg_sales__targets
     description: "Monthly sales targets preserving all target versions."
@@ -50,3 +93,13 @@ models:
         tests:
           - not_null
           - unique
+      - name: country_code
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['DE', 'ES', 'FR', 'IT', 'NL', 'PL']
+      - name: target_version
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['v1_Draft', 'v2_Approved']

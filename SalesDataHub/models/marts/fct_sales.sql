@@ -83,7 +83,13 @@ select
           and order_type = 'Standard_Order'
           and coalesce(is_internal_test_account, false) = false
           and rn_real_order = 1 then
-           CUSTOMER_ID end as new_customer
+           CUSTOMER_ID
+        end as new_customer,
+
+        CASE 
+            WHEN ORDER_STATUS = 'Invoiced' AND COALESCE(IS_INTERNAL_TEST_ACCOUNT, FALSE) = FALSE and order_type = 'Standard_Order'
+            THEN ORDER_ID
+        END AS ELIGIBLE_ORDER
 
         
         
