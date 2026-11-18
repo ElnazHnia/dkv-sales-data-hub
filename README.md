@@ -1,289 +1,110 @@
 # DKV Sales Data Hub
-### Building a Centralized, Scalable and Governed Sales Analytics Foundation
 
-## 1. Project Overview
+**One governed source of truth for sales reporting, built with Snowflake, dbt, GitHub and Power BI.**
 
-This project demonstrates the design and implementation of a centralized Sales Data Hub using **Snowflake, dbt, GitHub and Power BI**.
+Different regions report different numbers for the same KPI, because each report applies its own filters and formulas. This project replaces that with one tested data foundation and one set of metric definitions, used by both a global management view and a local operational view.
 
-The objective is to address inconsistent sales reporting, duplicated business logic and fragmented data models by establishing a centralized and reusable data foundation.
+## Dashboards
 
-The solution is designed to support two main business audiences:
+**Global Sales Dashboard** (for Global Sales Leadership): how much, how fast, where, and against the plan.
 
-- **Global Sales Leadership:** Company-wide sales performance monitoring and strategic decision-making.
-- **Regional Sales Teams:** Country-level performance monitoring and operational sales analysis.
+![Global Sales Dashboard](SalesDataHub/screenshot/Global%20sales%20Dashboard.jpg)
 
-Both audiences use consistent business definitions and a shared semantic data foundation, while maintaining different reporting perspectives and data access permissions.
+**Sales Performance Hub** (for country managers and sales reps): gap to my target, why, who, and which orders.
 
-## 2. Business Challenges
+![Sales Performance Hub dashboard](SalesDataHub/screenshot/Sales%20performance%20Hub%20dashboard.jpg)
 
-The project addresses the following challenges described in the case study:
+## What the data shows (Jan–Oct 2026)
 
-### Inconsistent KPI Definitions
-Different regional reports calculate the same business metrics using different filters and calculation logic, resulting in conflicting numbers.
+| KPI | Value | Meaning |
+|---|---|---|
+| Net revenue | EUR 490.6K | Invoiced, non-test revenue in EUR |
+| Sales orders | 910 | Invoiced standard orders |
+| Growth vs. same months 2025 | +21.95% | Same months in both years |
+| Target attainment | 79.46% | Revenue ÷ approved target to date |
+| New customers | 92 of 405 (22.72%) | First real order falls in the period |
 
-### Fragmented Data Models
-Direct connections to raw Snowflake tables in Power BI lead to duplicated transformations, complex relationships and difficult maintenance.
+Growth is real, but the plan assumed more, and new customers are the biggest gap. Poland is the only country below last year (−10.9%). Its revenue per order fell because hardware sales dropped sharply.
 
-### Global vs. Regional Reporting Requirements
-Global Sales Leadership needs a consolidated company-wide view, while regional teams require detailed insights into their respective markets.
+## Why teams reported different numbers
 
-### Data Governance and Access
-A centralized approach is needed to ensure consistent metric definitions, reliable data quality and controlled access to regional sales information.
+The same orders give nine different "revenue" figures, from EUR 1,160K to EUR 491K, depending on which filters are applied (duplicates, test accounts, order status, currency, tax, discount). The governed definition is EUR 491K. The rules now live in dbt, written once.
 
-## 3. Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| Snowflake | Cloud data warehouse and data storage |
-| dbt | Data transformation, testing and documentation |
-| GitHub | Version control and collaborative development |
-| Power BI | Business intelligence, visualization and semantic modeling |
-
-## 4. Data Sources
-
-The project uses four synthetic source tables provided as part of the DKV case study.
-
-| Source Table | Description |
-|---|---|
-| RAW_CUSTOMERS | Customer master data, historical records, country information, sales representatives and test-account indicators |
-| RAW_SALES_ORDERS | Sales transactions, order statuses, quantities, local currency amounts, discounts and ingestion timestamps |
-| RAW_PRODUCTS_CONTRACTS | Product hierarchy, categories, active status, service fee percentages and standard prices |
-| RAW_SALES_TARGETS | Monthly sales targets, country codes, target versions and approval information |
-
-## 5. Data Architecture
-
-The solution follows a layered data architecture using Snowflake and dbt, separating raw data ingestion, data transformation and business-ready analytical models.
-
-### 5.1 Sales Data Flow
-
-Customer, product and sales order data are processed through staging and intermediate transformation layers to produce the final sales fact table.
-
-**Staging Layer**
-- Standardizes source column names and data types.
-- Handles duplicate sales order records.
-- Performs basic data cleaning.
-- Preserves relevant historical customer records.
-
-**Intermediate Layer**
-- Applies reusable business logic.
-- Enriches sales orders with customer and product information.
-- Handles historical customer matching using effective-date logic.
-- Prepares consistent data for analytical models.
-
-**Sales Mart**
-- `fct_sales`: Order-level fact table containing enriched sales transactions.
-- `dim_customer`: Customer dimension preserving historical customer versions.
-- `dim_product`: Product dimension containing product attributes.
-- `dim_country`: Shared country dimension.
-- `dim_date`: Shared calendar dimension.
-
-### 5.2 Independent Sales Targets Data Flow
-
-Sales targets follow a separate transformation process and are not directly joined with sales orders, customers or products.
-
-**Target Staging**
-- Standardizes target source data.
-- Handles target version information.
-- Identifies approved target records.
-
-**Target Mart**
-- `fct_sales_targets`: Fact table containing approved monthly sales targets at country-month grain.
-
-This separation preserves the different grains of actual sales and sales targets.
-
-### 5.3 Shared Reporting Layer
-
-Actual sales and sales targets are not directly joined.
-
-Instead, both fact tables share conformed dimensions:
-
-- `dim_country`
-- `dim_date`
-
-This enables comparisons between actual sales performance and monthly targets without duplicating target values when aggregating order-level transactions.
-
-### Architecture Overview
+## Architecture
 
 ```text
-                 SNOWFLAKE RAW LAYER
-                         |
-          +--------------+--------------+
-          |              |              |
-      CUSTOMERS        ORDERS         PRODUCTS
-          |              |              |
-          +--------------+--------------+
-                         |
-                         v
-                  STAGING LAYER
-                         |
-                         v
-                INTERMEDIATE LAYER
-                         |
-                         v
-                    SALES MART
-                         |
-                 +-------+-------+
-                 |               |
-              fct_sales      Dimensions
-                             dim_customer
-                             dim_product
-                             dim_country
-                             dim_date
-
-
-          RAW_SALES_TARGETS
-                  |
-                  v
-             STAGING LAYER
-                  |
-                  v
-              TARGET MART
-                  |
-            fct_sales_targets
-
-
-          SHARED REPORTING LAYER
-          ----------------------
-          fct_sales
-          fct_sales_targets
-                 |
-          Shared Dimensions
-          dim_country
-          dim_date
-                 |
-                 v
-          POWER BI SEMANTIC MODEL
-                 |
-          +------+------+
-          |             |
-     Global Sales   Regional Sales
-     Management       Reporting
+Snowflake RAW  ->  dbt staging  ->  dbt intermediate  ->  dbt marts (star schema)  ->  Power BI model  ->  2 reports
+ 4 tables          clean, cast       dedupe, as-of join    facts and dimensions        measures, RLS        Management, Local
 ```
 
-## 6. Data Quality and Testing
+| Layer | Schema | Materialization | Purpose |
+|---|---|---|---|
+| Staging | STAGING | view | Rename, cast types, remove duplicate loads. One model per source table. |
+| Intermediate | INTERMEDIATE | view | Enrich orders with the customer version valid on the order date and with product data. |
+| Marts | MARTS | table | Star schema that Power BI connects to. |
 
-Data quality is an essential part of the Sales Data Hub.
+Sales targets follow their own path and are not joined to orders. Actual sales and targets meet only through the shared dimensions `dim_country` and `dim_date`, so target values are never duplicated when order-level data is aggregated.
 
-The project uses dbt testing to validate data integrity and business rules throughout the transformation process.
+### Models
 
-Examples of data quality checks include:
+| Model | Grain | Notes |
+|---|---|---|
+| `fct_sales` | One row per order | Revenue, discount, tax, eligibility flags, new-customer flag |
+| `fact_sales_target` | Country and month | Approved targets only (`v2_Approved`) |
+| `dim_customer` | Customer version (SCD2) | Country, segment, rep, credit tier |
+| `dim_product` | Product | Category, list price, service fee % |
+| `dim_country` | Country | Shared by actuals and targets |
+| `dim_date` | Day | Shared by actuals and targets |
 
-- `unique`: Ensures uniqueness of business and technical identifiers where applicable.
-- `not_null`: Checks mandatory fields.
-- `relationships`: Validates referential integrity between related models.
-- `accepted_values`: Ensures fields contain expected values.
-- Custom SQL tests: Validate specific business rules, such as approved target uniqueness per country and month.
+## Metric definitions
 
-Tests are defined alongside dbt models using YAML and SQL files.
-
-The intended CI/CD approach uses GitHub Actions to automate dbt validation when code changes are submitted through Pull Requests.
-
-## 7. Data Documentation and Lineage
-
-dbt documentation provides transparency into the transformation process and improves model maintainability.
-
-Documentation includes:
-
-- Model-level descriptions.
-- Column-level descriptions.
-- Source definitions.
-- Data quality test definitions.
-- Upstream and downstream model dependencies.
-- Transformation logic and compiled SQL.
-
-The dbt lineage graph helps analysts and engineers understand how raw source data flows through staging and intermediate models into the final analytical marts.
-
-## 8. Core Business Metrics
-
-The analytical foundation is designed to support centrally governed sales KPIs.
-
-Examples include:
-
-| KPI | Description |
+| Metric | Definition |
 |---|---|
-| Total Revenue (EUR) | Recognized sales revenue converted into EUR according to the agreed business definition |
-| Invoiced Sales Order Count | Number of qualifying invoiced standard sales orders |
-| Revenue vs. Target | Comparison of actual revenue against approved sales targets |
-| Target Achievement (%) | Actual revenue divided by the corresponding approved target |
-| New Customers | Number of customers meeting the agreed first-purchase definition |
-| Revenue by Country | Sales revenue aggregated by country |
-| Revenue by Product Category | Sales revenue grouped by product category |
-| Sales Representative Performance | Sales performance attributed to sales representatives |
+| Net revenue | Invoiced orders, test accounts excluded. (Gross − discount) × FX rate to EUR. Tax is not included. Credit notes are negative. |
+| Sales orders | Same filters, standard orders only (a credit note reverses a sale). |
+| New customer | The customer's first real order (Invoiced or Completed, standard order, not a test account) falls in the period. Counted once per customer. |
+| Target attainment | Net revenue ÷ approved target, for the same months. Draft target versions are never used. |
+| YoY growth | (This year − last year) ÷ last year, comparing the same months in both years. |
+| Discount rate | Discount ÷ gross amount. |
+| Cancellation rate | Cancelled orders ÷ all real standard orders. |
 
-Metric definitions, filters and calculation rules should be centrally maintained to ensure consistent reporting across all regions.
+## Key modelling decisions
 
-## 9. Power BI Reporting
+- **Duplicate order loads** (30 order IDs): keep the latest ingestion per order ID.
+- **Customer history** (1,000 rows for 700 customers): each order is joined to the customer version valid on the order date, so country and segment are correct for that date.
+- **Two currencies (EUR, PLN):** converted with the FX rate on the order.
+- **Tax:** checked that gross equals quantity × list price, so tax is on top and is not part of revenue.
+- **Service fee:** not part of the order amount, so it is kept out of revenue and shown as a separate measure.
+- **Test accounts:** flagged and excluded from KPIs, rows are kept for audit.
+- **Targets:** only the approved version is used.
 
-The solution uses a shared semantic model to support different reporting requirements without duplicating the underlying business logic.
+## Data quality and tests
 
-### 9.1 Global Management Report
+All tests run with `dbt build` or `dbt test`.
 
-Designed for Global Sales Leadership, providing a consolidated company-wide overview.
+- **Generic tests (YAML):** `unique` and `not_null` on keys, `relationships` from the fact to the dimensions, and `accepted_values` on status, order type, currency, channel, country, segment and category.
+- **Custom SQL tests (`SalesDataHub/tests/`):**
+  - `assert_revenue_ties_to_source`: revenue in `fct_sales` matches revenue recalculated from the staging models.
 
-Key analytical areas:
+## Power BI
 
-- Executive sales performance.
-- Actual revenue and target achievement.
-- Country ranking and performance comparisons.
-- Product category performance.
-- Customer and sales trends.
+- **Global management report:** revenue, orders, growth, target attainment, new customers, country and product mix. Attainment and growth are colored by range.
+- **Local report:** gap to target, revenue by month vs. target, rep table (revenue, orders, discount rate, cancellation rate), top products and customers, order status and order details.
 
-### 9.2 Regional Sales Report
 
-Designed for Country Managers, Sales Representatives and regional analysts.
+## Governance
 
-Key analytical areas:
+- Metric definitions are written once, in dbt.
+- Code is versioned in GitHub and tests run before changes are merged (CI with GitHub Actions is the next step).
+- The shared Power BI model is the only way to report, so teams reuse it instead of connecting to raw tables.
+- Row-level security controls access by country.
 
-- Regional sales performance.
-- Order status and sales order analysis.
-- Customer segmentation.
-- Product and sales channel performance.
-- Sales representative performance.
+## Next steps
 
-### 9.3 Data Access and Security
-
-Row-Level Security (RLS) is designed to control data visibility based on user access rights.
-
-Regional users should only access information belonging to their authorized markets, while global management should have access to consolidated company-wide information.
-
-Both reporting perspectives use the same governed semantic model.
-
-## 10. Governance and Maintainability
-
-The proposed governance approach establishes a consistent and sustainable analytics environment through:
-
-- Centralized KPI definitions.
-- Clearly assigned ownership for each metric.
-- dbt tests and documentation.
-- Version control through GitHub.
-- Automated validation through CI/CD.
-- Reusable transformation logic.
-- Consistent reporting through a shared Power BI semantic model.
-- Controlled data access through Row-Level Security.
-
-The objective is to establish a single source of truth and reduce duplicated business logic across regional reporting environments.
-
-## 11. Expected Business Outcomes
-
-The Sales Data Hub is designed to deliver the following benefits:
-
-- Consistent and trusted sales KPIs across regions.
-- Reduced duplication of transformation and calculation logic.
-- Improved data quality and transparency.
-- Reusable and maintainable data models.
-- Clear visibility into data dependencies and lineage.
-- Better support for global and regional decision-making.
-- Secure and controlled access to sales information.
-- A scalable foundation for future analytical requirements.
+- GitHub Actions workflow that runs `dbt build` on every pull request, in a separate CI schema.
+- Customer-status and pending-approval lists on the local report.
+- Incremental models for the order fact if the data grows.
 
 ---
 
-## Project Information
-
-**Project:** DKV Mobility – Sales Data Hub Candidate Case Study
-
-**Technology:** Snowflake | dbt | GitHub | Power BI
-
-**Focus Areas:** Data Engineering | Analytics Engineering | Business Intelligence | Data Governance
-
-**Repository:** [GitHub – DKV Sales Data Hub](https://github.com/ElnazHnia/dkv-sales-data-hub)
+**Project:** DKV Mobility – Sales Data Hub candidate case study · **Stack:** Snowflake · dbt · GitHub · Power BI
